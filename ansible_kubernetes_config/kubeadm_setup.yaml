@@ -1,0 +1,65 @@
+---
+- name: Update web servers
+  hosts: all
+  remote_user: vagrant
+  become: yes
+
+  tasks:
+#  - name: Update the apt package
+#    become: yes
+#    apt:
+#      update_cache: yes
+
+  - name: Install package needed for kubernetes repository
+    apt:
+      name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gpg
+      state: present
+    
+  - name: Verify /etc/apt/keyrings directory exist
+    file:
+      path: /etc/apt/keyrings
+      state: directory
+      mode: '0755'
+
+  - name: Download public signing key
+    get_url: 
+      url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key 
+      dest: /etc/apt/keyrings/kubernetes-apt-keyr.gpg
+      mode: '0644'
+      force: yes
+
+  - name: Demarmor downloaded GPG key
+    command: sudo gpg -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --dearmor /etc/apt/keyrings/kubernetes-apt-keyr.gpg
+    become: yes
+
+  - name: Add the Kubernetes apt repository
+    apt_repository:
+      repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+      state: present
+      filename: kubernetes
+
+  - name: Update the apt package
+    apt:
+      update_cache: yes
+      
+  - name: Install kubelet, kubeadm, kubectl
+    apt:
+      name:
+      - kubelet
+      - kubeadm
+      state: present
+
+  - name: Install kubectl on control plane nodes only
+    apt:
+      name: kubectl
+      state: present
+      force_apt_get: yes
+    when: ansible_hostname == "controlplane"
+  
+  - name: Pinning kubelet, kubeadm and kubectl version
+    command:
+      cmd: "apt-mark hold kubelet kubeadm kubectl"
